@@ -7,7 +7,7 @@ public struct GraphQLHTTPResponseError: Error, LocalizedError {
   public enum ErrorKind {
     case errorResponse
     case invalidResponse
-    
+
     var description: String {
       switch self {
       case .errorResponse:
@@ -17,7 +17,7 @@ public struct GraphQLHTTPResponseError: Error, LocalizedError {
       }
     }
   }
-  
+
   /// The body of the response.
   public let body: Data?
   /// Information about the response as provided by the server.
@@ -41,7 +41,7 @@ public struct GraphQLHTTPResponseError: Error, LocalizedError {
       return "Empty response body"
     }
   }
-  
+
   public var errorDescription: String? {
     return "\(kind.description) (\(response.statusCode) \(response.statusCodeDescription)): \(bodyDescription)"
   }
@@ -53,7 +53,7 @@ public class HTTPNetworkTransport: NetworkTransport {
   let session: URLSession
   let sessionDelegate: SessionDelegate
   let serializationFormat = JSONSerializationFormat.self
-  
+
   /// Creates a network transport with the specified server URL and session configuration.
   ///
   /// - Parameters:
@@ -66,7 +66,7 @@ public class HTTPNetworkTransport: NetworkTransport {
     self.session = URLSession(configuration: configuration, delegate: self.sessionDelegate, delegateQueue: nil)
     self.sendOperationIdentifiers = sendOperationIdentifiers
   }
-  
+
   /// Send a GraphQL operation to a server and return a response.
   ///
   /// - Parameters:
@@ -78,7 +78,7 @@ public class HTTPNetworkTransport: NetworkTransport {
   public func send<Operation: GraphQLOperation>(operation: Operation, completionHandler: @escaping (GraphQLResponse<Operation>?, Error?) -> Void) -> Cancellable {
     return self.upload(operation: operation, files: nil, progressHandler: nil, completionHandler: completionHandler)
   }
-  
+
   /// Send a GraphQL operation to a server and return a response.
   ///
   /// - Parameters:
@@ -92,7 +92,7 @@ public class HTTPNetworkTransport: NetworkTransport {
   public func upload<Operation>(operation: Operation, files: [GraphQLFile]? = nil, progressHandler: ((Progress) -> Void)? = nil, completionHandler: @escaping (GraphQLResponse<Operation>?, Error?) -> Void) -> Cancellable {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
-    
+
     if let files = files, !files.isEmpty {
       let formData = requestMultipartFormData(for: operation, files: files)
       request.setValue("multipart/form-data; boundary=\(formData.boundary)", forHTTPHeaderField: "Content-Type")
@@ -102,27 +102,27 @@ public class HTTPNetworkTransport: NetworkTransport {
       let body = requestBody(for: operation)
       request.httpBody = try! serializationFormat.serialize(value: body)
     }
-    
+
     func notifyCompletionHandler(data: Data?, response: URLResponse?, error: Error?) {
       if error != nil {
         completionHandler(nil, error)
         return
       }
-      
+
       guard let httpResponse = response as? HTTPURLResponse else {
         fatalError("Response should be an HTTPURLResponse")
       }
-      
+
       if (!httpResponse.isSuccessful) {
         completionHandler(nil, GraphQLHTTPResponseError(body: data, response: httpResponse, kind: .errorResponse))
         return
       }
-      
+
       guard let data = data else {
         completionHandler(nil, GraphQLHTTPResponseError(body: nil, response: httpResponse, kind: .invalidResponse))
         return
       }
-      
+
       do {
         guard let body =  try self.serializationFormat.deserialize(data: data) as? JSONObject else {
           throw GraphQLHTTPResponseError(body: data, response: httpResponse, kind: .invalidResponse)
@@ -133,13 +133,13 @@ public class HTTPNetworkTransport: NetworkTransport {
         completionHandler(nil, error)
       }
     }
-    
+
     let task = session.dataTask(with: request)
-    
+
     self.sessionDelegate.add(task: task, completionHandler: notifyCompletionHandler, progressHandler: progressHandler)
-    
+
     task.resume()
-    
+
     return task
   }
 
@@ -154,26 +154,24 @@ public class HTTPNetworkTransport: NetworkTransport {
     }
     return ["query": operation.queryDocument, "variables": operation.variables]
   }
-  
+
   private func requestMultipartFormData<Operation: GraphQLOperation>(for operation: Operation, files: [GraphQLFile]) -> MultipartFormData {
     let formData = MultipartFormData()
-    
-    let fields = requestBody(for: operation)
-    for (name, data) in fields {
-      if let data = data as? GraphQLMap {
-        let data = try! serializationFormat.serialize(value: data)
-        formData.appendPart(data: data, name: name)
-      } else if let data = data as? String {
-        formData.appendPart(string: data, name: name)
-      } else {
-        formData.appendPart(string: data.debugDescription, name: name)
-      }
+
+    let data = try! serializationFormat.serialize(value: requestBody(for: operation))
+    formData.appendPart(data: data, name: "operations")
+
+    var filesDic = [String: Any]()
+    for f in files {
+      filesDic[f.fieldName] = ["variables.file"]
     }
-    
+    let dicData = try! JSONSerialization.data(withJSONObject: filesDic, options: [])
+    formData.appendPart(data: dicData, name: "map")
+
     for f in files {
       formData.appendPart(inputStream: f.inputStream, contentLength: f.contentLength, name: f.fieldName, contentType: f.mimeType, filename: f.originalName)
     }
-    
+
     return formData
   }
 }
