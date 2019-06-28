@@ -22,6 +22,10 @@ public struct GraphQLFile {
     self.init(fieldName: fieldName, originalName: originalName, mimeType: mimeType, inputStream: inputStream, contentLength: contentLength)
   }
   
+  public init?(fieldName: String, fileURL: URL) {
+    self.init(fieldName: fieldName, originalName: fileURL.lastPathComponent, fileURL: fileURL)
+  }
+
   public init(fieldName: String, originalName: String, mimeType: String = "application/octet-stream", inputStream: InputStream, contentLength: UInt64) {
     self.fieldName = fieldName
     self.originalName = originalName

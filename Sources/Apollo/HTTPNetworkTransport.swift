@@ -161,10 +161,11 @@ public class HTTPNetworkTransport: NetworkTransport {
     let data = try! serializationFormat.serialize(value: requestBody(for: operation))
     formData.appendPart(data: data, name: "operations")
 
-    var filesDic = [String: Any]()
-    for f in files {
-      filesDic[f.fieldName] = ["variables.file"]
-    }
+//    var filesDic = [String: Any]()
+//    for f in files {
+//      filesDic[f.fieldName] = ["variables.file"]
+//    }
+    let filesDic = ["nFile": ["variables.files"]]
     let dicData = try! JSONSerialization.data(withJSONObject: filesDic, options: [])
     formData.appendPart(data: dicData, name: "map")
 
